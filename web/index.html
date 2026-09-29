@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maodan · Artwork &amp; Motion</title>
+    <style>
+      *, *::before, *::after { box-sizing: border-box; }
+      body {
+        margin: 0;
+        color: #243d33;
+        background: #f6f5ed;
+        font-family: system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+        font-size: 16px;
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+      }
+      h1, h2 {
+        color: #1e2b24;
+        font-family: ui-rounded, 'SF Pro Rounded', 'Segoe UI Variable Display', 'Segoe UI', system-ui, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+        font-weight: 700;
+        letter-spacing: -.02em;
+        text-wrap: balance;
+      }
+      p { text-wrap: pretty; }
+      ::selection { color: #1e2b24; background: #fdf1d2; }
+      .showcase { max-width: 1080px; margin: 0 auto; padding: 58px 28px 30px; }
+      .wordmark { margin: 0 0 40px; font-size: 13px; font-weight: 800; letter-spacing: .2em; }
+      .showcase-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 56px; align-items: center; }
+      .stage { position: relative; display: grid; min-height: 470px; border-radius: 28px; place-items: center; background: #e9eddf; }
+      .stage::before { content: ''; position: absolute; width: 260px; height: 260px; border: 1px solid #ced8c1; border-radius: 50%; }
+      /* Until the script draws, the sheet's first cell (idle) stands in, so the stage is never empty. */
+      .stage canvas {
+        position: relative;
+        display: block;
+        width: min(384px, 100%);
+        height: auto;
+        aspect-ratio: 192 / 208;
+        background: url('../assets/spritesheet.png') 0 0 / 800% 1100% no-repeat;
+      }
+      .stage canvas[data-ready='true'] { background-image: none; }
+      .stage-label { position: absolute; bottom: 22px; font-size: 11px; font-weight: 700; letter-spacing: .18em; color: #63735c; }
+      .eyebrow { margin: 0 0 14px; font-size: 12px; letter-spacing: .12em; font-weight: 700; color: #6d7b61; }
+      .showcase h1 { margin: 0; font-size: clamp(26px, 3vw, 37px); line-height: 1.4; letter-spacing: -.04em; }
+      .intro { margin: 20px 0 30px; font-size: 15px; line-height: 1.9; color: #647264; }
+      .origin-note { display: block; margin-top: 12px; color: #7a8574; font-size: 11px; line-height: 1.7; letter-spacing: .01em; }
+      .actions { display: grid; grid-template-columns: repeat(2, 1fr); gap: 9px; }
+      .actions button { padding: 12px 8px; border: 1px solid #d9dfce; border-radius: 10px; color: #506149; font: inherit; font-size: 13px; background: #fcfcf8; cursor: pointer; }
+      .actions button[aria-pressed='true'] { border-color: #42634f; background: #42634f; color: #fffdf5; }
+      .actions button:focus-visible { outline: 2px solid #42634f; outline-offset: 3px; }
+      .actions button:disabled { cursor: default; opacity: .6; }
+      .now-playing { min-height: 24px; margin: 16px 0 0; color: #647264; font-size: 12px; }
+      .showcase footer { margin-top: 40px; border-top: 1px solid #dfe3d6; padding-top: 20px; font-size: 11px; line-height: 1.9; color: #74806d; }
+      .showcase footer h2 { margin: 0 0 4px; color: #506149; font-size: 13px; }
+      .showcase footer p { margin: 0 0 14px; }
+      @media (max-width: 760px) {
+        .showcase { padding: 28px 20px; }
+        .wordmark { margin-bottom: 24px; }
+        .showcase-grid { grid-template-columns: 1fr; gap: 28px; }
+        .stage { min-height: 370px; }
+        .stage canvas { width: min(288px, 100%); }
+      }
+    </style>
+    <script src="../assets/animation.js" defer></script>
+    <script src="preview.js" defer></script>
+    <script>
+      document.addEventListener('DOMContentLoaded', () => {
+        const canvas = document.getElementById('maodan-canvas')
+        const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)')
+        const buttons = [...document.querySelectorAll('[data-animation]')]
+        const status = document.getElementById('now-playing')
+        let playing = buttons[0]
+        const controller = window.MaodanPreview.mount(canvas, {
+          onError: () => {
+            status.textContent = "Maodan's artwork could not be loaded. Keep the web and assets folders side by side, then reload."
+          },
+        })
+
+        function reflectMotionPreference() {
+          buttons.forEach((button) => { button.disabled = motionPreference.matches })
+          status.textContent = motionPreference.matches
+            ? 'Reduced motion is enabled in your system settings. Maodan is shown as a still image.'
+            : `Now playing: ${playing.textContent}`
+        }
+
+        reflectMotionPreference()
+        motionPreference.addEventListener('change', reflectMotionPreference)
+        buttons.forEach((button) => button.addEventListener('click', () => {
+          playing = button
+          buttons.forEach((item) => item.setAttribute('aria-pressed', String(item === button)))
+          controller.play(button.dataset.animation)
+          status.textContent = `Now playing: ${button.textContent}`
+        }))
+      })
+    </script>
+  </head>
+  <body>
+    <main class="showcase">
+      <p class="wordmark">MAODAN / ARTWORK &amp; MOTION</p>
+      <div class="showcase-grid">
+        <div class="stage">
+          <canvas id="maodan-canvas" width="192" height="208" role="img" aria-label="Maodan, a silver tabby American Shorthair"></canvas>
+          <span class="stage-label">YOUR LITTLE STUDY COMPANION</span>
+        </div>
+        <section aria-labelledby="maodan-title">
+          <p class="eyebrow">A REAL CAT, REIMAGINED FOR YOUR DESKTOP</p>
+          <h1 id="maodan-title">Meet Maodan, your desktop companion.</h1>
+          <p class="intro">A curious silver tabby brought to life with carefully crafted animations,<br>inspired by Maodan’s real markings and expressions.<br>Here for study sessions, breaks, and quiet moments.<small class="origin-note">Maodan is the cat of Wade and his girlfriend.</small></p>
+          <div class="actions" role="group" aria-label="Choose Maodan’s animation">
+            <button type="button" data-animation="idle" aria-pressed="true">Quiet company</button>
+            <button type="button" data-animation="wave" aria-pressed="false">Say hello</button>
+            <button type="button" data-animation="jump" aria-pressed="false">Happy jump</button>
+            <button type="button" data-animation="runLeft" aria-pressed="false">Run left</button>
+            <button type="button" data-animation="runRight" aria-pressed="false">Run right</button>
+            <button type="button" data-animation="rest" aria-pressed="false">Take a break</button>
+            <button type="button" data-animation="waiting" aria-pressed="false">Wait for you</button>
+            <button type="button" data-animation="working" aria-pressed="false">Study together</button>
+            <button type="button" data-animation="review" aria-pressed="false">Take a look</button>
+            <button type="button" data-animation="look" aria-pressed="false">Look around</button>
+          </div>
+          <p id="now-playing" class="now-playing" aria-live="polite">Now playing: Quiet company</p>
+        </section>
+      </div>
+      <footer id="credits">
+        <h2>Artwork &amp; Origin</h2>
+        <p>Maodan’s character and animations were created from original reference photos.</p>
+        <h2>On your desktop</h2>
+        <p>Start Maodan with 启动 Maodan.bat. Drag it to move it, click it for a little trick, and right-click it for tricks, size and settings.</p>
+      </footer>
+    </main>
+  </body>
+</html>

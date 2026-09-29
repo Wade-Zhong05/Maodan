@@ -1,0 +1,137 @@
+{
+  "frameWidth": 192,
+  "frameHeight": 208,
+  "columns": 8,
+  "spritesheet": "spritesheet.png",
+  "desktop": {
+    "spritesheet": "spritesheet-keyed.png",
+    "keyColor": "#010203"
+  },
+  "animations": {
+    "idle": {
+      "row": 0,
+      "frames": 6,
+      "fps": 8,
+      "durations": [
+        280,
+        110,
+        110,
+        140,
+        140,
+        320
+      ]
+    },
+    "runRight": {
+      "row": 1,
+      "frames": 8,
+      "fps": 8,
+      "durations": [
+        120,
+        120,
+        120,
+        120,
+        120,
+        120,
+        120,
+        220
+      ]
+    },
+    "runLeft": {
+      "row": 2,
+      "frames": 8,
+      "fps": 8,
+      "durations": [
+        120,
+        120,
+        120,
+        120,
+        120,
+        120,
+        120,
+        220
+      ]
+    },
+    "wave": {
+      "row": 3,
+      "frames": 4,
+      "fps": 8,
+      "durations": [
+        140,
+        140,
+        140,
+        280
+      ]
+    },
+    "jump": {
+      "row": 4,
+      "frames": 5,
+      "fps": 8,
+      "durations": [
+        140,
+        140,
+        140,
+        140,
+        280
+      ]
+    },
+    "rest": {
+      "row": 5,
+      "frames": 8,
+      "fps": 8,
+      "durations": [
+        140,
+        140,
+        140,
+        140,
+        140,
+        140,
+        140,
+        240
+      ]
+    },
+    "waiting": {
+      "row": 6,
+      "frames": 6,
+      "fps": 8,
+      "durations": [
+        150,
+        150,
+        150,
+        150,
+        150,
+        260
+      ]
+    },
+    "working": {
+      "row": 7,
+      "frames": 6,
+      "fps": 8,
+      "durations": [
+        120,
+        120,
+        120,
+        120,
+        120,
+        220
+      ]
+    },
+    "review": {
+      "row": 8,
+      "frames": 6,
+      "fps": 8,
+      "durations": [
+        150,
+        150,
+        150,
+        150,
+        150,
+        280
+      ]
+    },
+    "look": {
+      "row": 9,
+      "frames": 16,
+      "fps": 8
+    }
+  }
+}

@@ -1,0 +1,7 @@
+# pixi: a materialized, platform-locked environment, not source.
+# pixi.toml and pixi.lock are what reproduce it.
+.pixi/
+
+__pycache__/
+*.pyc
+.ruff_cache/

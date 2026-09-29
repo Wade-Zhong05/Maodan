@@ -1,0 +1,24 @@
+[workspace]
+name = "maodan"
+# The see-through pet window relies on Tk's -transparentcolor, which only Windows has.
+platforms = ["win-64"]
+channels = ["conda-forge"]
+requires-pixi = ">=0.80"
+
+[tasks]
+# The launcher starts pythonw.exe directly so no console stays open; this task keeps one for errors.
+start = { cmd = ["\"$CONDA_PREFIX/python.exe\"", "maodan.py"] }
+test = { cmd = ["\"$CONDA_PREFIX/python.exe\"", "-m", "unittest", "discover", "-s", "tests", "-v"] }
+
+[dependencies]
+python = "3.13.*"
+
+# Only rebuilding the sprite atlas needs Pillow, so the pet's own environment stays stdlib-only.
+[feature.art.dependencies]
+pillow = ">=11"
+
+[feature.art.tasks]
+build-atlas = { cmd = ["\"$CONDA_PREFIX/python.exe\"", "tools/build_atlas.py"] }
+
+[environments]
+art = { features = ["art"], solve-group = "default" }
