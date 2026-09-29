@@ -6,6 +6,7 @@ import contextlib
 import json
 import os
 import re
+import shutil
 import struct
 import sys
 import tempfile
@@ -305,27 +306,44 @@ class AtlasManifestTests(unittest.TestCase):
         self.assertLessEqual(used, set(self.spec['animations']))
         self.assertEqual(self.spec['animations']['look']['frames'], 16)  # one per pointer direction
 
-    def test_timings_match_frames_and_cells_fit_the_sheet(self):
-        for path in (maodan.ASSET_DIR / self.spec['spritesheet'],
-                     maodan.ASSET_DIR / self.spec['desktop']['spritesheet']):
-            with path.open('rb') as sheet:
-                header = sheet.read(24)
-            self.assertEqual(header[:8], b'\x89PNG\r\n\x1a\n', path.name)
-            width, height = struct.unpack('>II', header[16:24])
-            for action, animation in self.spec['animations'].items():
-                if 'durations' in animation:
-                    self.assertEqual(len(animation['durations']), animation['frames'], action)
-                self.assertLessEqual(animation['frames'], self.spec['columns'] * 2, action)
-                last_cell = animation['row'] * self.spec['columns'] + animation['frames'] - 1
-                bottom = (last_cell // self.spec['columns'] + 1) * self.spec['frameHeight']
-                self.assertLessEqual(bottom, height, (path.name, action))
-            self.assertEqual(width, self.spec['columns'] * self.spec['frameWidth'], path.name)
+    @staticmethod
+    def png_header(path):
+        """(width, height, colour type) of a PNG: type 2 is RGB, 6 is RGBA."""
+        with path.open('rb') as sheet:
+            header = sheet.read(26)
+        assert header[:8] == b'\x89PNG\r\n\x1a\n', path.name
+        return (*struct.unpack('>II', header[16:24]), header[25])
 
-    def test_the_fast_keyed_sheet_is_the_one_loaded(self):
-        path = maodan.SpriteAtlas.sheet_path(self.spec)
-        self.assertEqual(path.name, 'spritesheet-keyed.png')
-        other = {**self.spec, 'desktop': {**self.spec['desktop'], 'keyColor': '#000000'}}
-        self.assertEqual(maodan.SpriteAtlas.sheet_path(other).name, 'spritesheet.png')
+    def sheets(self):
+        """(path, cell width, cell height) of the web page's sheet and of every desktop sheet."""
+        yield maodan.ASSET_DIR / self.spec['spritesheet'], self.spec['frameWidth'], self.spec['frameHeight']
+        for size, name in self.spec['desktop']['sheets'].items():
+            scale = 3 * int(size) / 200  # what maodan.SpriteAtlas cuts at this size
+            yield (maodan.ASSET_DIR / name, round(self.spec['frameWidth'] * scale),
+                   round(self.spec['frameHeight'] * scale))
+
+    def test_timings_match_frames_and_cells_fit_every_sheet(self):
+        columns = self.spec['columns']
+        for action, animation in self.spec['animations'].items():
+            if 'durations' in animation:
+                self.assertEqual(len(animation['durations']), animation['frames'], action)
+            self.assertLessEqual(animation['frames'], columns * 2, action)
+        for path, cell_width, cell_height in self.sheets():
+            width, height, _colour_type = self.png_header(path)
+            self.assertEqual(width, columns * cell_width, path.name)
+            for action, animation in self.spec['animations'].items():
+                last_cell = animation['row'] * columns + animation['frames'] - 1
+                self.assertLessEqual((last_cell // columns + 1) * cell_height, height, (path.name, action))
+
+    def test_every_size_has_its_own_hard_edged_desktop_sheet(self):
+        desktop = self.spec['desktop']
+        self.assertEqual(desktop['keyColor'].lower(), maodan.TRANSPARENT)
+        self.assertEqual(sorted(map(int, desktop['sheets'])), list(maodan.PET_SIZES))
+        for name in desktop['sheets'].values():
+            # RGB: nothing half-transparent to fade into a rim, and Tk loads it quickly.
+            self.assertEqual(self.png_header(maodan.ASSET_DIR / name)[2], 2, name)
+        # The page keeps the soft edge: a browser can show real transparency.
+        self.assertEqual(self.png_header(maodan.ASSET_DIR / self.spec['spritesheet'])[2], 6)
 
 
 class AnimationPageTests(unittest.TestCase):
@@ -457,6 +475,7 @@ class LiveWindowTests(unittest.TestCase):
                 for index in range(animation['frames']):
                     image = pet.atlas.image(action, index)
                     self.assertEqual(image.width(), round(192 * pet.atlas.scale), (size, action))
+                    self.assertEqual(image.height(), round(208 * pet.atlas.scale), (size, action))
         self.assertEqual(maodan.load_pet_size(), maodan.PET_SIZES[-1])
         pet._clicked()
         pet._draw_frame(time.monotonic())
@@ -466,6 +485,19 @@ class LiveWindowTests(unittest.TestCase):
         self.assertEqual(self.root.state(), 'normal')
         pet.quit()
         self.assertTrue(pet.stopped)
+
+    def test_a_missing_sheet_leaves_the_current_size_in_place(self):
+        with tempfile.TemporaryDirectory() as assets:
+            assets = Path(assets)
+            (assets / 'desktop').mkdir()
+            shutil.copy(maodan.ASSET_DIR / 'animation.json', assets)
+            shutil.copy(maodan.ASSET_DIR / 'desktop' / 'sheet-25.png', assets / 'desktop')
+            atlas = maodan.SpriteAtlas(self.root, 25, assets)
+            frame = atlas.image('idle', 0)
+            with self.assertRaises(maodan.tk.TclError):
+                atlas.set_size(50)
+            self.assertEqual((atlas.scale, atlas.frame_width, atlas.frame_height), (0.375, 72, 78))
+            self.assertIs(atlas.image('idle', 0), frame)
 
 
 if __name__ == '__main__':

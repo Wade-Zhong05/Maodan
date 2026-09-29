@@ -25,7 +25,6 @@ import tkinter as tk
 import traceback
 import webbrowser
 from collections import deque
-from fractions import Fraction
 from pathlib import Path
 
 from instance import WindowsInstance
@@ -71,43 +70,51 @@ def create_root() -> tk.Tk:
 
 
 class SpriteAtlas:
-    """Play Maodan's frames from one sprite sheet.
+    """Play Maodan's frames, cut from the sprite sheet made for the current size.
 
-    PNG is used so the runtime needs only Python/Tk. ``tools/build_atlas.py`` makes the sheet and
-    its ``animation.json`` from the pose art in ``art/``.
+    The window hides one exact colour, TRANSPARENT, so it cannot show a soft edge: laid onto that
+    colour, the half-transparent fur round the cat became a dark, ragged rim. ``tools/build_atlas.py``
+    therefore draws a sheet for every size in PET_SIZES straight from the pose art, each pixel either
+    Maodan in its own colour or TRANSPARENT. Scaling one sheet here instead would blow its pixels up
+    into jagged steps. The sheets are RGB PNGs: for an RGBA photo Tk also builds a region of its
+    visible pixels, which takes seconds on Windows.
     """
 
     def __init__(self, root: tk.Tk, size_percent: int = 100, asset_dir: Path = ASSET_DIR):
         self.asset_dir = asset_dir
         self.spec = json.loads((asset_dir / 'animation.json').read_text(encoding='utf-8'))
         self.animations = self.spec['animations']
-        self.sheet = tk.PhotoImage(master=root, file=str(self.sheet_path(self.spec, asset_dir)))
         self.root = root
         self.frames: dict[tuple[str, int], tk.PhotoImage] = {}
         self.set_size(size_percent)
 
-    @staticmethod
-    def sheet_path(spec: dict, asset_dir: Path = ASSET_DIR) -> Path:
-        """The atlas to load: the keyed copy when it was made for this window's transparent colour.
-
-        For an RGBA photo Tk also builds a region of its visible pixels, and for this atlas that takes
-        about seven seconds on Windows --- almost all of Maodan's start-up. The keyed copy is the same
-        atlas already composited onto TRANSPARENT, which is exactly what Tk draws it onto, so it
-        shows the same pixels and loads in about a tenth of a second.
-        """
-        keyed = spec.get('desktop') or {}
-        path = asset_dir / str(keyed.get('spritesheet') or '')
-        if str(keyed.get('keyColor', '')).lower() == TRANSPARENT and path.is_file():
-            return path
-        return asset_dir / spec['spritesheet']
+    def sheet_path(self, size_percent: int) -> Path:
+        desktop = self.spec['desktop']
+        if str(desktop['keyColor']).lower() != TRANSPARENT:
+            raise ValueError('The desktop sheets are keyed onto a colour this window does not hide')
+        return self.asset_dir / desktop['sheets'][str(size_percent)]
 
     def set_size(self, size_percent: int) -> None:
         if size_percent not in PET_SIZES:
             raise ValueError('Unsupported pet size')
-        self.ratio = Fraction(3 * size_percent, 200)
-        self.scale = float(self.ratio)
-        # Keep only the current size, so resizing does not retain multiple full atlases.
-        self.frames.clear()
+        scale = 3 * size_percent / 200
+        width = round(self.spec['frameWidth'] * scale)
+        height = round(self.spec['frameHeight'] * scale)
+        # Everything is cut before anything is replaced, so a missing sheet leaves the old size.
+        sheet = tk.PhotoImage(master=self.root, file=str(self.sheet_path(size_percent)))
+        columns = self.spec['columns']
+        frames = {}
+        for action, animation in self.animations.items():
+            for index in range(animation['frames']):
+                cell = animation['row'] * columns + index
+                x, y = (cell % columns) * width, (cell // columns) * height
+                frame = tk.PhotoImage(master=self.root, width=width, height=height)
+                frame.tk.call(frame, 'copy', sheet, '-from', x, y, x + width, y + height)
+                frames[action, index] = frame
+        # Only the cut frames are kept; holding on to the sheet as well would double the memory.
+        self.frames = frames
+        self.scale = scale
+        self.frame_width, self.frame_height = width, height
 
     def duration(self, action: str) -> float:
         animation = self.animations[action]
@@ -127,17 +134,7 @@ class SpriteAtlas:
         return int(max(0, elapsed) * animation['fps']) % animation['frames']
 
     def image(self, action: str, frame_index: int) -> tk.PhotoImage:
-        key = (action, frame_index)
-        if key not in self.frames:
-            animation = self.animations[action]
-            columns = self.spec['columns']
-            cell = animation['row'] * columns + frame_index
-            width, height = self.spec['frameWidth'], self.spec['frameHeight']
-            x, y = (cell % columns) * width, (cell // columns) * height
-            frame = tk.PhotoImage(master=self.root, width=width, height=height)
-            frame.tk.call(frame, 'copy', self.sheet, '-from', x, y, x + width, y + height)
-            self.frames[key] = frame.zoom(self.ratio.numerator).subsample(self.ratio.denominator)
-        return self.frames[key]
+        return self.frames[action, frame_index]
 
     def draw(
         self, canvas: tk.Canvas, action: str, frame_index: int, *,
@@ -283,8 +280,8 @@ class Maodan:
         initial_size = size_percent if size_percent is not None else load_pet_size()
         self.size_percent = tk.IntVar(master=root, value=initial_size)
         self.atlas = SpriteAtlas(root, initial_size)
-        self.width = max(MIN_WINDOW_WIDTH, round(self.atlas.spec['frameWidth'] * self.atlas.scale))
-        self.height = round(self.atlas.spec['frameHeight'] * self.atlas.scale) + SPEECH_HEIGHT
+        self.width = max(MIN_WINDOW_WIDTH, self.atlas.frame_width)
+        self.height = self.atlas.frame_height + SPEECH_HEIGHT
         self.menu_open = False
         self._menu_topmost = True
         self.action = 'idle'
@@ -471,8 +468,8 @@ class Maodan:
         x, y = self.root.winfo_x(), self.root.winfo_y()
         self.atlas.set_size(size_percent)
         self.size_percent.set(size_percent)
-        self.width = max(MIN_WINDOW_WIDTH, round(self.atlas.spec['frameWidth'] * self.atlas.scale))
-        self.height = round(self.atlas.spec['frameHeight'] * self.atlas.scale) + SPEECH_HEIGHT
+        self.width = max(MIN_WINDOW_WIDTH, self.atlas.frame_width)
+        self.height = self.atlas.frame_height + SPEECH_HEIGHT
         # Keep Maodan's feet and horizontal centre in place when changing size.
         x += (old_width - self.width) // 2
         y += old_height - self.height
@@ -569,8 +566,8 @@ class Maodan:
     def _draw_frame(self, now: float) -> None:
         self.canvas.delete('all')
         action, frame_index = self._animation_frame(now)
-        sprite_width = round(self.atlas.spec['frameWidth'] * self.atlas.scale)
-        self.atlas.draw(self.canvas, action, frame_index, left=(self.width - sprite_width) // 2)
+        left = (self.width - self.atlas.frame_width) // 2
+        self.atlas.draw(self.canvas, action, frame_index, left=left)
         c = self.canvas
         if self.speech:
             c.create_rectangle(18, 4, self.width - 18, 35, fill=PAPER, outline=TEAL, width=1)

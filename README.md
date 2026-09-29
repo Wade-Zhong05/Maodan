@@ -6,7 +6,7 @@
 
 双击 **`启动 Maodan.bat`**，猫会出现在屏幕右下角。
 
-- 在一台电脑上第一次运行时，启动文件会用 [pixi](https://pixi.sh) 按 `pixi.lock` 自动准备 Python 环境（需要联网一次）。没有 pixi 时，会改用电脑上已安装的 Python 3（需要带 Tkinter）。
+- 在一台电脑上第一次运行时，启动文件会自动安装 [pixi](https://pixi.sh)，再按 `pixi.lock` 准备独立的 Python 和 Tk 环境（需要联网一次，无需管理员权限）。如果在线安装失败，仍会尝试电脑上已有的 Python 3 与 Tkinter。
 - 猫已经在运行时再双击一次，会把它叫回来（包括用过 *Hide for now* 之后），不会出现第二只。
 
 ## 怎么玩

@@ -5,6 +5,11 @@ those poses into the frame grid that ``maodan.py`` plays, and describes it in
 ``assets/animation.json``. ``assets/animation.js`` carries the same description for the animation
 page in ``web/``: opened straight from disk, a browser refuses to fetch() the JSON.
 
+The desktop window can make only one exact colour see-through, so it cannot show a soft edge. Laid
+onto that colour, the semi-transparent pixels round the fur turned into a dark, ragged rim. So each
+pet size gets its own sheet in ``assets/desktop/``, drawn at that size straight from the pose art,
+where every pixel is either Maodan in its own colour or the see-through colour.
+
 Run with ``pixi run -e art build-atlas`` (the ``art`` environment adds Pillow).
 """
 
@@ -25,6 +30,11 @@ FRAME_HEIGHT = 208
 COLUMNS = 8
 ROWS = 11
 KEY_COLOR = (1, 2, 3)  # maodan.TRANSPARENT, the colour the desktop window keys out
+# maodan.PET_SIZES; a size of p% shows a frame at 1.5 * p / 100 times FRAME_WIDTH x FRAME_HEIGHT.
+DESKTOP_SIZES = (25, 50, 75, 100, 125, 150)
+# At or above this opacity a pixel is Maodan; below, see-through. Half coverage keeps the drawn
+# outline where the soft edge has it, without the faint fur haze beyond it.
+ALPHA_THRESHOLD = 128
 
 
 @dataclass(frozen=True)
@@ -228,24 +238,52 @@ def load_pose(pose: Pose) -> Image.Image:
     return image.crop(bbox)
 
 
-def render_frame(source: Image.Image, pose: Pose, plan: Frame) -> Image.Image:
+def render_frame(source: Image.Image, pose: Pose, plan: Frame, scale: float = 1) -> Image.Image:
+    """One cell, ``scale`` times FRAME_WIDTH x FRAME_HEIGHT, laid out as at scale 1."""
     width, height = source.size
     ratio = min(pose.max_width / width, pose.max_height / height)
     width = max(1, round(width * ratio * plan.stretch_x))
     height = max(1, round(height * ratio * plan.stretch_y))
-    # Resize premultiplied RGBA so invisible source colours cannot create a
-    # red/yellow fringe around fur and whiskers after Lanczos interpolation.
-    art = source.convert("RGBa").resize(
-        (width, height), Image.Resampling.LANCZOS).convert("RGBA")
-    if plan.mirrored:
-        art = art.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
     left = round((FRAME_WIDTH - width) / 2) + plan.dx
     top = FRAME_HEIGHT - pose.bottom - height + plan.dy
     if left < 0 or top < 0 or left + width > FRAME_WIDTH or top + height > FRAME_HEIGHT:
         raise ValueError(f"Pose does not fit in cell: {pose.file.name}, {plan}")
-    frame = Image.new("RGBA", (FRAME_WIDTH, FRAME_HEIGHT))
-    frame.alpha_composite(art, (left, top))
+    # Resize premultiplied RGBA so invisible source colours cannot create a
+    # red/yellow fringe around fur and whiskers after Lanczos interpolation.
+    art = source.convert("RGBa").resize(
+        (max(1, round(width * scale)), max(1, round(height * scale))),
+        Image.Resampling.LANCZOS).convert("RGBA")
+    if plan.mirrored:
+        art = art.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
+    frame = Image.new("RGBA", (round(FRAME_WIDTH * scale), round(FRAME_HEIGHT * scale)))
+    frame.alpha_composite(art, (round(left * scale), round(top * scale)))
     return frame
+
+
+def keyed_sheet(sheet: Image.Image) -> Image.Image:
+    """``sheet`` for the desktop window: each pixel Maodan in its own colour, or KEY_COLOR."""
+    opaque = sheet.getchannel("A").point(lambda opacity: 255 if opacity >= ALPHA_THRESHOLD else 0)
+    colours = sheet.convert("RGB")
+    # A pixel of Maodan that happened to be exactly KEY_COLOR would show as a hole.
+    red, green, blue = (channel.point(lambda value, wanted=wanted: 255 if value == wanted else 0)
+                        for channel, wanted in zip(colours.split(), KEY_COLOR))
+    colours.paste((KEY_COLOR[0], KEY_COLOR[1], KEY_COLOR[2] + 1),
+                  mask=ImageChops.multiply(ImageChops.multiply(red, green), blue))
+    keyed = Image.new("RGB", sheet.size, KEY_COLOR)
+    keyed.paste(colours, mask=opaque)
+    return keyed
+
+
+def sheet_at(sources: dict[str, Image.Image], scale: float) -> Image.Image:
+    """Every animation's frames in one RGBA sheet, each cell ``scale`` times the normal size."""
+    width, height = round(FRAME_WIDTH * scale), round(FRAME_HEIGHT * scale)
+    sheet = Image.new("RGBA", (COLUMNS * width, ROWS * height))
+    for action, row in ACTION_ROWS.items():
+        for index, plan in enumerate(ACTION_FRAMES[action]):
+            cell = row * COLUMNS + index
+            frame = render_frame(sources[plan.pose], POSES_BY_NAME[plan.pose], plan, scale)
+            sheet.alpha_composite(frame, ((cell % COLUMNS) * width, (cell // COLUMNS) * height))
+    return sheet
 
 
 def build(assets: Path = ASSETS) -> None:
@@ -256,16 +294,15 @@ def build(assets: Path = ASSETS) -> None:
         raise FileNotFoundError("Missing Maodan key poses:\n" + "\n".join(missing))
 
     sources = {name: load_pose(POSES_BY_NAME[name]) for name in required}
-    sheet = Image.new("RGBA", (COLUMNS * FRAME_WIDTH, ROWS * FRAME_HEIGHT))
     manifest: dict = {
         "frameWidth": FRAME_WIDTH,
         "frameHeight": FRAME_HEIGHT,
         "columns": COLUMNS,
         "spritesheet": "spritesheet.png",
-        # The desktop window keys out one colour, so it loads a copy already composited onto it.
+        # One sheet per pet size, each keyed onto the one colour the desktop window hides.
         "desktop": {
-            "spritesheet": "spritesheet-keyed.png",
             "keyColor": "#{:02x}{:02x}{:02x}".format(*KEY_COLOR),
+            "sheets": {str(size): f"desktop/sheet-{size}.png" for size in DESKTOP_SIZES},
         },
         "animations": {},
     }
@@ -286,10 +323,6 @@ def build(assets: Path = ASSETS) -> None:
                 raise ValueError(
                     f"Repeated adjacent frames in {action}: {index - 1} and {index}")
             previous_pixels = pixels
-            cell = row * COLUMNS + index
-            x = (cell % COLUMNS) * FRAME_WIDTH
-            y = (cell // COLUMNS) * FRAME_HEIGHT
-            sheet.alpha_composite(frame, (x, y))
         animation = {"row": row, "frames": len(plans), "fps": 8}
         if action in DURATIONS:
             if len(DURATIONS[action]) != len(plans):
@@ -298,17 +331,16 @@ def build(assets: Path = ASSETS) -> None:
             animation["durations"] = DURATIONS[action]
         manifest["animations"][action] = animation
 
-    assets.mkdir(parents=True, exist_ok=True)
-    sheet.save(assets / "spritesheet.png", optimize=True)
-    keyed = Image.new("RGB", sheet.size, KEY_COLOR)
-    keyed.paste(sheet, mask=sheet.getchannel("A"))
-    keyed.save(assets / "spritesheet-keyed.png", optimize=True)
+    (assets / "desktop").mkdir(parents=True, exist_ok=True)
+    sheet_at(sources, 1).save(assets / "spritesheet.png", optimize=True)
+    for size, name in manifest["desktop"]["sheets"].items():
+        keyed_sheet(sheet_at(sources, 1.5 * int(size) / 100)).save(assets / name, optimize=True)
     description = json.dumps(manifest, ensure_ascii=False, indent=2)
     (assets / "animation.json").write_text(description + "\n", encoding="utf-8")
     (assets / "animation.js").write_text(
         "// Generated by tools/build_atlas.py; the same data as animation.json, for web/index.html.\n"
         f"window.MAODAN_ANIMATION = {description};\n", encoding="utf-8")
-    print(f"Built {sheet.width}x{sheet.height} Maodan atlas in {assets}")
+    print(f"Built Maodan's atlas and {len(DESKTOP_SIZES)} desktop sheets in {assets}")
 
 
 if __name__ == "__main__":

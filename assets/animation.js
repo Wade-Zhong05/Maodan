@@ -5,8 +5,15 @@ window.MAODAN_ANIMATION = {
   "columns": 8,
   "spritesheet": "spritesheet.png",
   "desktop": {
-    "spritesheet": "spritesheet-keyed.png",
-    "keyColor": "#010203"
+    "keyColor": "#010203",
+    "sheets": {
+      "25": "desktop/sheet-25.png",
+      "50": "desktop/sheet-50.png",
+      "75": "desktop/sheet-75.png",
+      "100": "desktop/sheet-100.png",
+      "125": "desktop/sheet-125.png",
+      "150": "desktop/sheet-150.png"
+    }
   },
   "animations": {
     "idle": {

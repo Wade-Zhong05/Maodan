@@ -12,6 +12,7 @@ test = { cmd = ["\"$CONDA_PREFIX/python.exe\"", "-m", "unittest", "discover", "-
 
 [dependencies]
 python = "3.13.*"
+tk = ">=8.6,<9"
 
 # Only rebuilding the sprite atlas needs Pillow, so the pet's own environment stays stdlib-only.
 [feature.art.dependencies]
