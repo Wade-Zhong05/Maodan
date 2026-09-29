@@ -1,12 +1,13 @@
 # Maodan Desktop Pet
 
-Maodan (猫蛋) is a silver tabby American Shorthair who lives on your desktop. Originally created as PROMIS's desktop companion, Maodan is now a standalone application that does not connect to PROMIS or require a server or network connection while running.
+Maodan (毛蛋) is a silver tabby American Shorthair who lives on your desktop. Originally created as PROMIS's desktop companion, Maodan is now a standalone application that does not connect to PROMIS or require a server or network connection while running.
 
 ## Getting Started
 
 Double-click **`Start Maodan.bat`** and Maodan will appear in the bottom-right corner of your screen.
 
-- On the first launch, the script automatically installs [Pixi](https://pixi.sh), then uses `pixi.lock` to create an isolated Python and Tk environment. This one-time setup requires an internet connection but does not require administrator privileges. If online setup fails, the launcher will still try to use an existing Python 3 installation with Tkinter.
+- Nothing needs to be installed first. On the first launch, the script downloads its own copy of [Pixi](https://pixi.sh) (a pinned, checksum-verified release) into this folder and uses `pixi.lock` to build an isolated Python and Tk environment next to it. This one-time setup needs an internet connection (github.com and conda.anaconda.org) and takes a minute or two, but no administrator rights; nothing is installed system-wide or added to `PATH`, so deleting the folder removes everything. If setup cannot finish, the launcher falls back to an existing Python 3 with Tkinter, and running it again continues where it stopped.
+- If you downloaded Maodan as a `.zip`, extract the whole folder before double-clicking the launcher.
 - If Maodan is already running, double-clicking the launcher again brings him back to the screen—even after using *Hide for now*—instead of opening a second instance.
 
 ## Interactions

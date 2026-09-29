@@ -1,0 +1,5 @@
+# cmd.exe can lose track of a batch file's :labels when its lines end in LF only.
+*.bat text eol=crlf
+
+*.png binary
+*.webp binary
