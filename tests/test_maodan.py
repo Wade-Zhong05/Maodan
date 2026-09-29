@@ -264,10 +264,13 @@ class SettingsTests(unittest.TestCase):
         env.start()
         self.addCleanup(env.stop)
 
-    def test_defaults_before_anything_is_saved(self):
+    def test_defaults_are_written_on_first_use(self):
         self.assertEqual(maodan.load_pet_size(), 100)
         self.assertTrue(maodan.load_study_along())
-        self.assertEqual(maodan.settings_path(), Path(self.appdata.name) / 'Maodan' / 'settings.json')
+        path = Path(self.appdata.name) / 'Maodan' / 'settings.json'
+        self.assertEqual(maodan.settings_path(), path)
+        self.assertTrue(path.is_file())
+        self.assertEqual(json.loads(path.read_text(encoding='utf-8')), maodan.DEFAULT_SETTINGS)
 
     def test_size_and_study_along_are_remembered_together(self):
         self.assertTrue(maodan.save_pet_size(75))

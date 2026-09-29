@@ -5,7 +5,7 @@ or settles in the direction of the drag), click it for a little trick, and right
 tricks, its size and its settings, or for a web page that plays every animation. While you type
 anywhere, Maodan studies along.
 
-Only Python's standard library is used. Start it with ``启动 Maodan.bat`` or ``pixi run start``.
+Only Python's standard library is used. Start it with ``Start Maodan.bat`` or ``pixi run start``.
 Starting it again while it runs brings the running Maodan back, for example after Hide for now,
 instead of opening a second one.
 """
@@ -148,11 +148,31 @@ def settings_path() -> Path:
     return root / 'Maodan' / 'settings.json'
 
 
+DEFAULT_SETTINGS = {
+    'size_percent': 100,
+    'study_along_when_typing': True,
+}
+
+
 def log_path() -> Path:
     return settings_path().with_name('maodan.log')
 
 
+def _ensure_settings_file() -> bool:
+    """Create the settings directory and explicit defaults on first use."""
+    try:
+        path = settings_path()
+        if path.exists():
+            return True
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(f'{json.dumps(DEFAULT_SETTINGS, indent=2)}\n', encoding='utf-8')
+        return True
+    except OSError:
+        return False
+
+
 def _load_settings() -> dict:
+    _ensure_settings_file()
     try:
         settings = json.loads(settings_path().read_text(encoding='utf-8'))
         return settings if isinstance(settings, dict) else {}
@@ -164,7 +184,9 @@ def _save_settings(**changes) -> bool:
     try:
         path = settings_path()
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps({**_load_settings(), **changes}, indent=2), encoding='utf-8')
+        path.write_text(
+            f'{json.dumps({**_load_settings(), **changes}, indent=2)}\n', encoding='utf-8',
+        )
         return True
     except OSError:
         return False
@@ -595,6 +617,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
+    _ensure_settings_file()
     instance = WindowsInstance('pet')
     try:
         if not instance.owner:
